@@ -1,0 +1,169 @@
+---
+title: "Reading data from the web"
+author: "Jessica Lavery"
+date: "10/10/2019"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(httr)
+
+```
+
+# Summary of rvest functions
+
+`xml2::read_html` read HTML
+
+`rvest::html_nodes` extract info from HTML document via CSS selectors
+
+`rvest::html_text` convert from HTML to text
+
+`httr::GET` get a url
+
+`httr::content` retrieve the contents from a URL provided in `httr::GET`
+
+# National Survey on Drug Use and Health (NSDUH)
+
+```{r}
+# URL
+url <- "http://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+
+drug_use_xml <-  read_html(url)
+```
+
+Try to extract HTML nodes that we care about without Selector Gadget via the table CSS tag. This will work a lot of the time, but not always. 
+
+```{r}
+drug_use_xml %>%
+  html_nodes(css = "table")
+```
+
+It looks like this worked - there are 15 tables on the website and 15 rows in `drug_use_xml`. 
+
+To subset on the first table, rather than look at all tables at the same time: 
+
+```{r}
+table_marj <- drug_use_xml %>%
+  html_nodes(css = "table") %>% 
+  .[[1]] %>% 
+  html_table() %>% #do not print at this step, the note print shows up in the first row of every column
+  slice(-1) %>% #Choose rows by their ordinal position in the tbl.
+  as_tibble()
+```
+
+# Cost of living in NY
+```{r}
+ny_cost_xml <- read_html("https://www.bestplaces.net/cost_of_living/city/new_york/new_york") 
+
+ny_cost_xml %>%
+  html_nodes(css = "table") %>% 
+  .[[1]] %>% 
+  html_table(header = TRUE)
+```
+
+# Harry Potter Movies
+
+HP movie names
+
+```{r}
+hpsaga_html <- read_html("https://www.imdb.com/list/ls000630791/")
+
+hpsaga_html %>% 
+  html_nodes(css = ".lister-item-header a") %>% 
+  html_text() #convert from HTML to text
+```
+
+HP movie run times
+
+```{r}
+hpsaga_html %>% 
+  html_nodes(css = ".runtime") %>% 
+  html_text() #convert from HTML to text
+```
+
+HP movie gross
+
+```{r}
+hpsaga_html %>% 
+  html_nodes(css = ".text-small:nth-child(7) span:nth-child(5)") %>% 
+  html_text() #convert from HTML to text
+```
+
+# Napoleon Dynamite
+
+```{r}
+nd_html <- read_html("https://www.amazon.com/product-reviews/B00005JNBQ/ref=cm_cr_arp_d_viewopt_rvwer?ie=UTF8&reviewerType=avp_only_reviews&sortBy=recent&pageNumber=1")
+
+review_titles <- nd_html %>% 
+  html_nodes(css = ".a-text-bold span") %>% 
+  html_text()
+
+# rating
+review_stars <- nd_html %>% 
+  html_nodes(css = "#cm_cr-review_list .review-rating") %>% 
+  html_text()
+
+# reviews
+review_text <- nd_html %>%
+  html_nodes(".review-text-content span") %>%
+  html_text()
+
+reviews = tibble(
+  title = review_titles,
+  stars = review_stars,
+  text = review_text)
+
+reviews
+```
+
+# Using an API
+
+## NYC Water Dataset
+
+Found links to csv and json APIs by going to API documentation and 'Getting Started'. Drop down on top right to toggle between csv and json. 
+
+```{r}
+# via csv version of API
+nyc_water = 
+  GET("https://data.cityofnewyork.us/resource/ia2d-e54m.csv") %>% 
+  content("parsed")
+
+# via json version of API, takes a little more work in this case
+nyc_water = 
+  GET("https://data.cityofnewyork.us/resource/waf7-5gvc.json") %>% 
+  content("text") %>%
+  jsonlite::fromJSON() %>%
+  as_tibble()
+```
+
+## BRFS dataset
+
+```{r}
+# https://catalog.data.gov/dataset/behavioral-risk-factors-selected-metropolitan-area-risk-trends-smart-mmsa-prevalence-data--ab58f
+
+brfs <- GET("https://data.cdc.gov/api/views/waxm-p5qv") %>% 
+  content("parsed")
+```
+
+## A more complicated example: Pokemon
+
+```{r}
+poke = 
+  GET("http://pokeapi.co/api/v2/pokemon/1") %>%
+  content()
+
+poke$name
+
+poke$height
+
+poke$abilities
+
+```
+
+
